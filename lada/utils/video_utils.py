@@ -80,8 +80,9 @@ def VideoReaderOpenCV(*args, **kwargs):
         cap.release()
 
 class VideoReader:
-    def __init__(self, file):
+    def __init__(self, file, hw_decode_enabled=False):
         self.file = file
+        self.hw_decode_enabled = hw_decode_enabled
         self.container = None
 
     def __enter__(self):
@@ -89,6 +90,12 @@ class VideoReader:
         # E.g. metadata could be encoded in CP936 instead of UTF-8 which would raise an error if we don't pass it in metadata_encoding.
         # If we use it in the future we have to consider non-default character encodings.
         self.container = av.open(self.file, metadata_errors='ignore')
+        if self.hw_decode_enabled:
+            vstream = self.container.streams.video[0]
+            try:
+                vstream.codec_context.options['hwaccel'] = 'cuda'
+            except Exception:
+                logger.warning("CUDA hardware decoding setup failed, falling back to software decoding")
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -362,6 +369,10 @@ def is_intel_qsv_encoding_available() -> bool:
             return False
 
 @cache
+def is_nvidia_cuda_decoding_available() -> bool:
+    return _is_codec_hardware_acceleration_working('h264', 'cuda', codec_mode='r')
+
+@cache
 def is_nvidia_cuda_encoding_available() -> bool:
     return _is_codec_hardware_acceleration_working('h264_nvenc', 'cuda')
 
@@ -385,6 +396,9 @@ def is_apple_videotoolbox_encoding_available() -> bool:
                 return True
     except Exception:
         return False
+
+def is_nvidia_encoder(encoder_name: str) -> bool:
+    return '_nvenc' in encoder_name.lower()
 
 def _is_codec_hardware_acceleration_working(codec_name: str, hwaccel_device_type: str, codec_mode: Literal["r", "w"]='w') -> bool:
     try:

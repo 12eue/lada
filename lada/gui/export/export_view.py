@@ -436,16 +436,19 @@ class ExportView(Gtk.Widget):
         def run_export():
             success = True
             progress_update_step_size = 100
+            preset = utils.get_selected_preset(self.config)
+            video_metadata = video_utils.get_video_meta_data(source_file.get_path())
+            hw_decode_enabled = video_utils.is_nvidia_encoder(preset.encoder_name) and video_utils.is_nvidia_cuda_decoding_available()
             frame_restorer_options = FrameRestorerOptions(self._config.mosaic_restoration_model,
                                                           self._config.mosaic_detection_model,
-                                                          video_utils.get_video_meta_data(source_file.get_path()),
+                                                          video_metadata,
                                                           self._config.device,
                                                           self._config.max_clip_duration,
                                                           False,
                                                           False,
                                                           self._config.fp16_enabled,
-                                                          self._config.detect_face_mosaics)
-            video_metadata = frame_restorer_options.video_metadata
+                                                          self._config.detect_face_mosaics,
+                                                          hw_decode_enabled)
             frame_restorer_provider = FRAME_RESTORER_PROVIDER
             frame_restorer_provider.init(frame_restorer_options)
             frame_restorer = frame_restorer_provider.get()
@@ -457,7 +460,6 @@ class ExportView(Gtk.Widget):
                 else:
                     start_ns = 0
                     start_frame_num = 0
-                    preset = utils.get_selected_preset(self.config)
                     self.video_writer = video_utils.VideoWriter(
                         video_tmp_file_output_path, video_metadata.video_width,
                         video_metadata.video_height, video_metadata.video_fps_exact,
