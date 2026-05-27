@@ -25,6 +25,7 @@ winget install --id Rustlang.Rustup -e --source winget
 winget install --id Microsoft.VCRedist.2013.x64  -e --source winget
 winget install --id Microsoft.VCRedist.2013.x86  -e --source winget
 ```
+安装完python后，配置路径到环境变量PATH，以执行 python 和 python3 命令。 
 
 安装完成后**重启电脑**。
 
@@ -86,13 +87,13 @@ uv pip install patch
 uv run --no-project python -m patch -p1 -d venv_gtk_release/lib/site-packages patches/gvsbuild_ffmpeg.patch
 uv pip uninstall patch
 
-# 设置环境变量，引导 FFmpeg 使用 MSVC 工具链
-$env:MSYS2_ARG_CONV_EXCL = "*"
-$env:CC = "cl"
-$env:LD = "link"
+# 设置环境变量，引导 FFmpeg 使用 MSVC 工具链（好像不需要且没有效果）
+set MSYS2_ARG_CONV_EXCL=*
+set CC=cl
+set LD=link
 
 # 构建 GTK 及相关依赖（耗时较长）
-gvsbuild build --configuration=release --build-dir="./build_gtk_release" --enable-gi --py-wheel gtk4 adwaita-icon-theme pygobject libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-bad gst-plugins-ugly gst-plugin-gtk4 gst-libav gst-python gettext
+gvsbuild build --configuration=release --build-dir='./build_gtk_release' --enable-gi --py-wheel gtk4 adwaita-icon-theme pygobject libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-plugin-gtk4 gst-libav gst-python gettext
 
 # 构建 GTK 及相关依赖（通过 --fast-build 跳过已构建的包，与上面指令二选一，未验证）
 gvsbuild build --configuration=release --build-dir='./build_gtk_release' --enable-gi --py-wheel --fast-build gtk4 adwaita-icon-theme pygobject libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-plugin-gtk4 gst-libav gst-python gettext
