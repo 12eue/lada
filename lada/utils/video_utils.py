@@ -89,6 +89,10 @@ class VideoReader:
         # E.g. metadata could be encoded in CP936 instead of UTF-8 which would raise an error if we don't pass it in metadata_encoding.
         # If we use it in the future we have to consider non-default character encodings.
         self.container = av.open(self.file, metadata_errors='ignore')
+        # Use NVIDIA hardware decoding when available (same GPU used for NVENC encoding)
+        if _get_nvidia_cuda_decoding_available():
+            hwaccel = av.codec.hwaccel.HWAccel('cuda', allow_software_fallback=True)
+            self.container.streams.video[0].codec_context.hwaccel = hwaccel
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -101,7 +105,7 @@ class VideoReader:
         # Alternatively, setting thread_type to 'SLICE' would also avoid the deadlock even with av logs enabled but may negatively impact performance.
         av.logging.restore_default_callback()
         av.logging.set_libav_level(av.logging.ERROR)
-        self.container.streams.video[0].thread_type = 'AUTO'
+        self.container.streams.video[0].thread_type = 'SLICE' if _get_nvidia_cuda_decoding_available() else 'AUTO'
 
         # Fault-tolerant frame decoding with frame duplication for corrupted frames
         # This approach mimics how ffmpeg CLI handles corrupted frames by duplicating the last good frame
@@ -366,6 +370,10 @@ def is_nvidia_cuda_encoding_available() -> bool:
     return _is_codec_hardware_acceleration_working('h264_nvenc', 'cuda')
 
 @cache
+def is_nvidia_cuda_decoding_available() -> bool:
+    return _is_codec_hardware_acceleration_working('h264_cuvid', 'cuda', 'r')
+
+@cache
 def is_apple_videotoolbox_encoding_available() -> bool:
     if sys.platform != "darwin":
         return False
@@ -396,6 +404,14 @@ def _is_codec_hardware_acceleration_working(codec_name: str, hwaccel_device_type
             return True
     except Exception:
         return False
+
+_nvidia_cuda_decoding_available = None
+
+def _get_nvidia_cuda_decoding_available():
+    global _nvidia_cuda_decoding_available
+    if _nvidia_cuda_decoding_available is None:
+        _nvidia_cuda_decoding_available = is_nvidia_cuda_decoding_available()
+    return _nvidia_cuda_decoding_available
 
 class VideoWriter:
     def _parse_encoder_options(self, encoder_options: str):
