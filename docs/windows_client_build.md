@@ -151,7 +151,7 @@ $env:Path = $release_dir + "\bin;" + $env:Path
 $env:LIB = $release_dir + "\lib;" + $env:LIB
 $env:INCLUDE = $release_dir + "\include;" + $release_dir + "\include\cairo;" + $release_dir + "\include\glib-2.0;" + $release_dir + "\include\gobject-introspection-1.0;" + $release_dir + "\lib\glib-2.0\include;" + $env:INCLUDE
 
-# 执行打包（选择 lada.spec 用于完整构建，或 lada_alone.spec 用于仅 CLI）
+# 执行打包（选择 lada.spec 用于完整构建）
 uv run --no-project pyinstaller --noconfirm ./packaging/windows/lada.spec -- --extra=nvidia
 
 deactivate

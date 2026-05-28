@@ -88,11 +88,9 @@ class VideoReader:
         # We currently do not pass through metadata to the output file so let's just ignore potential errors. Fixes #127
         # E.g. metadata could be encoded in CP936 instead of UTF-8 which would raise an error if we don't pass it in metadata_encoding.
         # If we use it in the future we have to consider non-default character encodings.
-        self.container = av.open(self.file, metadata_errors='ignore')
         # Use NVIDIA hardware decoding when available (same GPU used for NVENC encoding)
-        if _get_nvidia_cuda_decoding_available():
-            hwaccel = av.codec.hwaccel.HWAccel('cuda', allow_software_fallback=True)
-            self.container.streams.video[0].codec_context.hwaccel = hwaccel
+        hwaccel = av.codec.hwaccel.HWAccel('cuda', allow_software_fallback=True) if _get_nvidia_cuda_decoding_available() else None
+        self.container = av.open(self.file, metadata_errors='ignore', hwaccel=hwaccel)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
