@@ -49,6 +49,7 @@ class Config(GObject.Object):
         'show_mosaic_detections': False,
         'temp_directory': tempfile.gettempdir(),
         'detect_face_mosaics': False,
+        'nvidia_decode_enabled': False,
         'subtitles_font_size': 16,
     }
 
@@ -74,6 +75,7 @@ class Config(GObject.Object):
         self._temp_directory = self._defaults['temp_directory']
         self._fp16_enabled = self._defaults['fp16_enabled']
         self._detect_face_mosaics = self._defaults['detect_face_mosaics']
+        self._nvidia_decode_enabled = self._defaults['nvidia_decode_enabled']
         self._subtitles_font_size = self._defaults['subtitles_font_size']
 
         self.save_lock = threading.Lock()
@@ -313,6 +315,17 @@ class Config(GObject.Object):
         self._subtitles_font_size = value
         self.save()
 
+    @GObject.Property()
+    def nvidia_decode_enabled(self):
+        return self._nvidia_decode_enabled
+
+    @nvidia_decode_enabled.setter
+    def nvidia_decode_enabled(self, value):
+        if value == self._nvidia_decode_enabled:
+            return
+        self._nvidia_decode_enabled = value
+        self.save()
+
     def save(self):
         self.save_lock.acquire_lock()
         config_file_path = self.get_config_file_path()
@@ -365,6 +378,7 @@ class Config(GObject.Object):
         self.temp_directory = self._defaults['temp_directory']
         self.validate_and_set_device(self._defaults['device'])
         self.detect_face_mosaics = self._defaults['detect_face_mosaics']
+        self.nvidia_decode_enabled = self._defaults['nvidia_decode_enabled']
         self.subtitles_font_size = self._defaults['subtitles_font_size']
         self.save()
 
@@ -397,6 +411,7 @@ class Config(GObject.Object):
             'show_mosaic_detections': self._show_mosaic_detections,
             'temp_directory': self._temp_directory,
             'detect_face_mosaics': self._detect_face_mosaics,
+            'nvidia_decode_enabled': self._nvidia_decode_enabled,
             'subtitles_font_size': self._subtitles_font_size,
         }
 

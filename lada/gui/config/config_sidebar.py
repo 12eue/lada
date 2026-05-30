@@ -48,6 +48,7 @@ class ConfigSidebar(Gtk.Box):
     check_button_show_mosaic_detections: Gtk.CheckButton = Gtk.Template.Child()
     switch_row_seek_preview = Gtk.Template.Child()
     switch_row_fp16: Adw.SwitchRow = Gtk.Template.Child()
+    switch_row_nvidia_decode: Adw.SwitchRow = Gtk.Template.Child()
     switch_row_detect_faces = Gtk.Template.Child()
     expander_row_encoding_presets: Adw.ExpanderRow = Gtk.Template.Child()
     expander_row_detection_models: Adw.ExpanderRow = Gtk.Template.Child()
@@ -126,6 +127,8 @@ class ConfigSidebar(Gtk.Box):
 
         self.switch_row_seek_preview.set_active(config.seek_preview_enabled)
         self.switch_row_fp16.set_active(config.fp16_enabled)
+        self.switch_row_nvidia_decode.set_active(config.nvidia_decode_enabled)
+        self.switch_row_nvidia_decode.set_visible(video_utils.is_nvidia_cuda_decoding_available())
         self.switch_row_detect_faces.set_active(config.detect_face_mosaics)
         self.switch_row_detect_faces.set_visible(config.mosaic_detection_model != 'v2')
         self.switch_row_mp4_fast_start.set_active(config.mp4_fast_start)
@@ -339,6 +342,11 @@ class ConfigSidebar(Gtk.Box):
     @skip_if_uninitialized
     def switch_row_fp16_active_callback(self, switch_row, active):
         self._config.fp16_enabled = switch_row.get_property("active")
+
+    @Gtk.Template.Callback()
+    @skip_if_uninitialized
+    def switch_row_nvidia_decode_active_callback(self, switch_row, active):
+        self._config.nvidia_decode_enabled = switch_row.get_property("active")
 
     @Gtk.Template.Callback()
     @skip_if_uninitialized

@@ -25,7 +25,7 @@ logging.basicConfig(level=LOG_LEVEL)
 class FrameRestorer:
     def __init__(self, device, video_file, max_clip_length, mosaic_restoration_model_name,
                  mosaic_detection_model: Yolo11SegmentationModel, mosaic_restoration_model, preferred_pad_mode,
-                 mosaic_detection=False):
+                 mosaic_detection=False, nvidia_decode=False):
         self.device = torch.device(device)
         self.mosaic_restoration_model_name = mosaic_restoration_model_name
         self.max_clip_length = max_clip_length
@@ -36,6 +36,7 @@ class FrameRestorer:
         self.start_ns = 0
         self.start_frame = 0
         self.mosaic_detection = mosaic_detection
+        self.nvidia_decode = nvidia_decode
         self.eof = False
         self.stop_requested = False
 
@@ -60,7 +61,8 @@ class FrameRestorer:
                                               device=self.device,
                                               max_clip_length=self.max_clip_length,
                                               pad_mode=self.preferred_pad_mode,
-                                              error_handler=self._on_worker_thread_error)
+                                              error_handler=self._on_worker_thread_error,
+                                              nvidia_decode=self.nvidia_decode)
 
         self.clip_restoration_thread: PipelineThread | None = None
         self.frame_restoration_thread: PipelineThread | None = None
@@ -306,7 +308,7 @@ class FrameRestorer:
 
     def _frame_restoration_worker(self):
         logger.debug("frame restoration worker: started")
-        with video_utils.VideoReader(self.video_meta_data.video_file) as video_reader:
+        with video_utils.VideoReader(self.video_meta_data.video_file, nvidia_decode=self.nvidia_decode) as video_reader:
             if self.start_ns > 0:
                 video_reader.seek(self.start_ns)
 

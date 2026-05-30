@@ -78,6 +78,13 @@ SPDX-License-Identifier: AGPL-3.0
                                         <signal name="notify::active" handler="switch_row_fp16_active_callback"/>
                                     </object>
                                 </child>
+                                <child>
+                                    <object class="AdwSwitchRow" id="switch_row_nvidia_decode">
+                                        <property name="title" translatable="true">GPU Decoding</property>
+                                        <property name="subtitle" translatable="true">Use Nvidia GPU hardware decoding for faster video decoding. Reduces CPU usage during restoration.</property>
+                                        <signal name="notify::active" handler="switch_row_nvidia_decode_active_callback"/>
+                                    </object>
+                                </child>
                             </object>
                         </child>
                         <child>

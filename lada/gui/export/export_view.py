@@ -444,7 +444,8 @@ class ExportView(Gtk.Widget):
                                                           False,
                                                           False,
                                                           self._config.fp16_enabled,
-                                                          self._config.detect_face_mosaics)
+                                                          self._config.detect_face_mosaics,
+                                                          self._config.nvidia_decode_enabled)
             video_metadata = frame_restorer_options.video_metadata
             frame_restorer_provider = FRAME_RESTORER_PROVIDER
             frame_restorer_provider.init(frame_restorer_options)

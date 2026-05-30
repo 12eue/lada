@@ -80,15 +80,19 @@ def VideoReaderOpenCV(*args, **kwargs):
         cap.release()
 
 class VideoReader:
-    def __init__(self, file):
+    def __init__(self, file, nvidia_decode: bool = False):
         self.file = file
+        self.nvidia_decode = nvidia_decode
         self.container = None
 
     def __enter__(self):
         # We currently do not pass through metadata to the output file so let's just ignore potential errors. Fixes #127
         # E.g. metadata could be encoded in CP936 instead of UTF-8 which would raise an error if we don't pass it in metadata_encoding.
         # If we use it in the future we have to consider non-default character encodings.
-        self.container = av.open(self.file, metadata_errors='ignore')
+        hwaccel = None
+        if self.nvidia_decode:
+            hwaccel = av.codec.hwaccel.HWAccel('cuda', allow_software_fallback=True)
+        self.container = av.open(self.file, metadata_errors='ignore', hwaccel=hwaccel)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -101,7 +105,7 @@ class VideoReader:
         # Alternatively, setting thread_type to 'SLICE' would also avoid the deadlock even with av logs enabled but may negatively impact performance.
         av.logging.restore_default_callback()
         av.logging.set_libav_level(av.logging.ERROR)
-        self.container.streams.video[0].thread_type = 'AUTO'
+        self.container.streams.video[0].thread_type = 'SLICE' if self.nvidia_decode else 'AUTO'
 
         # Fault-tolerant frame decoding with frame duplication for corrupted frames
         # This approach mimics how ffmpeg CLI handles corrupted frames by duplicating the last good frame
@@ -364,6 +368,10 @@ def is_intel_qsv_encoding_available() -> bool:
 @cache
 def is_nvidia_cuda_encoding_available() -> bool:
     return _is_codec_hardware_acceleration_working('h264_nvenc', 'cuda')
+
+@cache
+def is_nvidia_cuda_decoding_available() -> bool:
+    return _is_codec_hardware_acceleration_working('h264_cuvid', 'cuda', 'r')
 
 @cache
 def is_apple_videotoolbox_encoding_available() -> bool:

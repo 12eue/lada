@@ -27,6 +27,7 @@ class FrameRestorerOptions:
     passthrough: bool
     fp16_enabled: bool
     detect_face_mosaics: bool
+    nvidia_decode: bool
 
 class FrameRestorerOptionsBuilder:
     def __init__(self, initial: FrameRestorerOptions | None = None):
@@ -42,6 +43,7 @@ class FrameRestorerOptionsBuilder:
                 "passthrough": initial.passthrough,
                 "fp16_enabled": initial.fp16_enabled,
                 "detect_face_mosaics": initial.detect_face_mosaics,
+                "nvidia_decode": initial.nvidia_decode,
             }
 
     def mosaic_restoration_model_name(self, value: str) -> 'FrameRestorerOptionsBuilder':
@@ -80,6 +82,10 @@ class FrameRestorerOptionsBuilder:
         self._properties["mosaic_detection"] = value
         return self
 
+    def nvidia_decode(self, value: bool) -> 'FrameRestorerOptionsBuilder':
+        self._properties["nvidia_decode"] = value
+        return self
+
     def build(self) -> FrameRestorerOptions:
         # Check that all properties have been set
         if any(value is None for value in self._properties.values()):
@@ -100,7 +106,7 @@ class FrameRestorerProvider:
     def get(self):
         assert self.options is not None, "IllegalState: get called but options are not initialized. Call init before using get"
         if self.options.passthrough:
-            return PassthroughFrameRestorer(self.options.video_metadata.video_file)
+            return PassthroughFrameRestorer(self.options.video_metadata.video_file, nvidia_decode=self.options.nvidia_decode)
 
         is_empty_cache = self.models_cache is None
         cache_miss = False
@@ -145,7 +151,8 @@ class FrameRestorerProvider:
                              self.models_cache["mosaic_detection_model"],
                              self.models_cache["mosaic_restoration_model"],
                              self.models_cache["mosaic_restoration_model_preferred_pad_mode"],
-                             self.options.mosaic_detection)
+                             self.options.mosaic_detection,
+                             nvidia_decode=self.options.nvidia_decode)
 
     def _clear_cache(self):
         if self.models_cache is None:
@@ -165,14 +172,15 @@ class FrameRestorerProvider:
         self.models_cache = None
 
 class PassthroughFrameRestorer:
-    def __init__(self, video_file):
+    def __init__(self, video_file, nvidia_decode: bool = False):
         self.video_file = video_file
+        self.nvidia_decode = nvidia_decode
         self.video_reader: video_utils.VideoReader | None = None
         self.frame_restoration_queue = None
         self.stopped = False
 
     def start(self, start_ns=0):
-        self.video_reader = video_utils.VideoReader(self.video_file)
+        self.video_reader = video_utils.VideoReader(self.video_file, nvidia_decode=self.nvidia_decode)
         self.video_reader = self.video_reader.__enter__()
         if start_ns >= 0:
             self.video_reader.seek(start_ns)
