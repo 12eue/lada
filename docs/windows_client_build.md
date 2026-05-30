@@ -87,11 +87,6 @@ uv pip install patch
 uv run --no-project python -m patch -p1 -d venv_gtk_release/lib/site-packages patches/gvsbuild_ffmpeg.patch
 uv pip uninstall patch
 
-# 设置环境变量，引导 FFmpeg 使用 MSVC 工具链（好像不需要且没有效果）
-set MSYS2_ARG_CONV_EXCL=*
-set CC=cl
-set LD=link
-
 # 构建 GTK 及相关依赖（耗时较长）
 gvsbuild build --configuration=release --build-dir='./build_gtk_release' --enable-gi --py-wheel gtk4 adwaita-icon-theme pygobject libadwaita gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-plugin-gtk4 gst-libav gst-python gettext
 
@@ -133,13 +128,7 @@ uv pip install polars-lts-cpu
 deactivate
 ```
 
-### 5. 编译翻译文件（可选）
-
-```powershell
-powershell -ExecutionPolicy Bypass .\translations\compile_po.ps1
-```
-
-### 6. 运行 PyInstaller 打包
+### 5. 运行 PyInstaller 打包
 
 ```powershell
 # 激活虚拟环境
@@ -150,6 +139,9 @@ $release_dir = (Resolve-Path ".\build_gtk_release\gtk\x64\release").Path
 $env:Path = $release_dir + "\bin;" + $env:Path
 $env:LIB = $release_dir + "\lib;" + $env:LIB
 $env:INCLUDE = $release_dir + "\include;" + $release_dir + "\include\cairo;" + $release_dir + "\include\glib-2.0;" + $release_dir + "\include\gobject-introspection-1.0;" + $release_dir + "\lib\glib-2.0\include;" + $env:INCLUDE
+
+# 编译翻译文件（可选）
+powershell -ExecutionPolicy Bypass .\translations\compile_po.ps1
 
 # 执行打包（选择 lada.spec 用于完整构建）
 uv run --no-project pyinstaller --noconfirm ./packaging/windows/lada.spec -- --extra=nvidia
