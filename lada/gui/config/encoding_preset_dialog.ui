@@ -106,6 +106,20 @@ SPDX-License-Identifier: AGPL-3.0
                                 <property name="placeholder_text" translatable="true">Enter encoder options…</property>
                             </object>
                         </child>
+
+                        <child>
+                            <object class="GtkLabel">
+                                <property name="label" translatable="true">&lt;big&gt;Video Filter&lt;&#47;big&gt;</property>
+                                <property name="xalign">0.5</property>
+                                <property name="use-markup">True</property>
+                            </object>
+                        </child>
+
+                        <child>
+                            <object class="GtkEntry" id="entry_video_filter">
+                                <property name="placeholder_text" translatable="true">e.g. fps=30</property>
+                            </object>
+                        </child>
                     </object>
                 </property>
             </object>

@@ -421,6 +421,7 @@ class Config(GObject.Object):
             'description': encoding_preset.description,
             'encoder_name': encoding_preset.encoder_name,
             'encoder_options': encoding_preset.encoder_options,
+            'video_filter': encoding_preset.video_filter,
         }
 
     def get_default_value(self, key):
@@ -514,7 +515,8 @@ class Config(GObject.Object):
         self._custom_encoding_presets = set()
         for custom_preset in custom_encoding_presets:
             try:
-                self._custom_encoding_presets.add(video_utils.EncodingPreset(custom_preset["name"], custom_preset["description"], True, custom_preset["encoder_name"], custom_preset["encoder_options"]))
+                video_filter = custom_preset.get("video_filter", "")
+                self._custom_encoding_presets.add(video_utils.EncodingPreset(custom_preset["name"], custom_preset["description"], True, custom_preset["encoder_name"], custom_preset["encoder_options"], video_filter))
             except:
                 logger.warning(f"Couldn't parse custom preset '{custom_preset}' as EncodingPreset. Ignoring...")
 

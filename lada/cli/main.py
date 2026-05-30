@@ -95,6 +95,7 @@ def setup_argparser() -> argparse.ArgumentParser:
     export.add_argument('--list-encoders', action='store_true', help=_("List available encoders and exit"))
     export.add_argument('--encoder-options', type=str, help=_("Space-separated list of options for the encoder set via \"--encoder\". Use \"--list-encoder-options\" to see what's available. (default: %(default)s)"))
     export.add_argument('--list-encoder-options', metavar='ENCODER', type=str, help=_("List available options of the given encoder and exit"))
+    export.add_argument('--video-filter', type=str, default='', help=_("Video filter chain applied before encoding using FFmpeg libavfilter syntax (e.g. fps=30). Ignored if \"--encoding-preset\" is used and the preset defines a video filter. (default: %(default)s)"))
     export.add_argument('--mp4-fast-start',  default=False, action=argparse.BooleanOptionalAction, help=_("Allows playing the file while it's being written. Sets .mp4 mov flags \"frag_keyframe+empty_moov+faststart\". (default: %(default)s)"))
 
     group_restoration = parser.add_argument_group(_('Mosaic Restoration'))
@@ -111,7 +112,7 @@ def setup_argparser() -> argparse.ArgumentParser:
     return parser
 
 def process_video_file(input_path: str, output_path: str, temp_dir_path: str, device: torch.device, mosaic_restoration_model, mosaic_detection_model,
-                       mosaic_restoration_model_name, preferred_pad_mode, max_clip_length, encoder: str, encoder_options: str, mp4_fast_start, nvidia_decode=False):
+                       mosaic_restoration_model_name, preferred_pad_mode, max_clip_length, encoder: str, encoder_options: str, mp4_fast_start, nvidia_decode=False, video_filter: str = ""):
     video_metadata = get_video_meta_data(input_path)
 
     frame_restorer = FrameRestorer(device, input_path, max_clip_length, mosaic_restoration_model_name,
@@ -125,7 +126,7 @@ def process_video_file(input_path: str, output_path: str, temp_dir_path: str, de
         frame_restorer_progressbar.init()
         with VideoWriter(video_tmp_file_output_path, video_metadata.video_width, video_metadata.video_height,
                          video_metadata.video_fps_exact, encoder=encoder, encoder_options=encoder_options,
-                         time_base=video_metadata.time_base, mp4_fast_start=mp4_fast_start) as video_writer:
+                         time_base=video_metadata.time_base, mp4_fast_start=mp4_fast_start, video_filter=video_filter) as video_writer:
             for elem in frame_restorer:
                 if elem is STOP_MARKER or isinstance(elem, ErrorMarker):
                     success = False
@@ -220,9 +221,11 @@ def main():
 
     encoder = None
     encoder_options = None
+    video_filter = ""
     if args.encoder:
         encoder = args.encoder
         encoder_options = args.encoder_options if args.encoder_options else ''
+        video_filter = args.video_filter if args.video_filter else ''
     elif args.encoding_preset:
         encoding_presets = video_utils.get_encoding_presets()
         found = False
@@ -231,6 +234,7 @@ def main():
                 found = True
                 encoder = preset.encoder_name
                 encoder_options = preset.encoder_options
+                video_filter = preset.video_filter
                 break
         if not found:
             print(_("Invalid encoding preset"))
@@ -256,7 +260,7 @@ def main():
         try:
             process_video_file(input_path=input_path, output_path=output_path, temp_dir_path=args.temporary_directory, device=device, mosaic_restoration_model=mosaic_restoration_model, mosaic_detection_model=mosaic_detection_model,
                                mosaic_restoration_model_name=mosaic_restoration_model_name, preferred_pad_mode=preferred_pad_mode, max_clip_length=args.max_clip_length,
-                               encoder=encoder, encoder_options=encoder_options, mp4_fast_start=args.mp4_fast_start, nvidia_decode=args.nvidia_decode)
+                               encoder=encoder, encoder_options=encoder_options, mp4_fast_start=args.mp4_fast_start, nvidia_decode=args.nvidia_decode, video_filter=video_filter)
         except KeyboardInterrupt:
             print(_("Received Ctrl-C, stopping restoration."))
             break

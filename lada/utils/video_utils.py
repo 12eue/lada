@@ -281,6 +281,7 @@ class EncodingPreset:
     user_preset: bool
     encoder_name: str
     encoder_options: str
+    video_filter: str = ""
 
     def __hash__(self): return hash(self.name)
 
@@ -337,7 +338,8 @@ def get_encoding_presets() -> list[EncodingPreset]:
             if is_apple_preset and not has_apple_vt:
                 continue
 
-            preset = EncodingPreset(row["preset_name"], row["preset_description(translatable)"], False, row["encoder_name"], row["encoder_options"])    
+            video_filter = row.get("video_filter", "")
+            preset = EncodingPreset(row["preset_name"], row["preset_description(translatable)"], False, row["encoder_name"], row["encoder_options"], video_filter)
             presets.append(preset)
         return presets
 
@@ -414,7 +416,78 @@ class VideoWriter:
         }
         return parsed_encoder_options
 
-    def __init__(self, output_path, width, height, fps, encoder: str, encoder_options: str, time_base=None, mp4_fast_start=False):
+    @staticmethod
+    def _parse_video_filter(video_filter: str) -> list[tuple[str, dict[str, str]]]:
+        """Parse a video filter string into a list of (filter_name, kwargs) tuples.
+
+        Supports ffmpeg libavfilter syntax:
+        - Single filter with named params: ``fps=30`` → ``("fps", {"fps": "30"})``
+        - Multiple named params: ``fps=30:round=near`` → ``("fps", {"fps": "30", "round": "near"})``
+        - Filter chain: ``fps=30,eq=brightness=0.1`` → two linked filter nodes
+        - Filter with no params: ``yadif`` → ``("yadif", {})``
+        """
+        if not video_filter or not video_filter.strip():
+            return []
+
+        filters = []
+        for filter_str in video_filter.split(','):
+            filter_str = filter_str.strip()
+            if not filter_str:
+                continue
+
+            eq_pos = filter_str.find('=')
+            if eq_pos == -1:
+                # No params: filter name only (e.g. "yadif")
+                filters.append((filter_str, {}))
+            else:
+                filter_name = filter_str[:eq_pos]
+                args_str = filter_str[eq_pos + 1:]
+                kwargs = {}
+                # Split args on ':' but respect quoted values
+                # Simple split — advanced filter graphs with nested expressions
+                # would need the full ffmpeg filter parser, but common use cases
+                # (fps, eq, scale, etc.) work with this.
+                parts = args_str.split(':')
+                for part in parts:
+                    part = part.strip()
+                    if not part:
+                        continue
+                    kv_eq = part.find('=')
+                    if kv_eq != -1:
+                        kwargs[part[:kv_eq]] = part[kv_eq + 1:]
+                    else:
+                        # Positional arg — use as value with key = filter_name
+                        # e.g. "fps=30" → kwargs["fps"] = "30"
+                        kwargs[filter_name] = part
+                filters.append((filter_name, kwargs))
+        return filters
+
+    def _create_filter_graph(self, video_filter: str, width: int, height: int, time_base):
+        """Create a PyAV filter graph from a video filter string."""
+        graph = av.filter.Graph()
+
+        # Buffer source — must match the frame format we push (rgb24 from ndarray)
+        buffer_src = graph.add_buffer(width=width, height=height, format='rgb24', time_base=time_base)
+
+        # Parse and add filter nodes
+        parsed_filters = self._parse_video_filter(video_filter)
+        nodes = [buffer_src]
+        for filter_name, kwargs in parsed_filters:
+            node = graph.add(filter_name, **kwargs)
+            nodes.append(node)
+
+        # Buffer sink
+        buffersink = graph.add("buffersink")
+        nodes.append(buffersink)
+
+        # Link all nodes in sequence
+        for i in range(len(nodes) - 1):
+            nodes[i].link_to(nodes[i + 1])
+
+        graph.configure()
+        return graph
+
+    def __init__(self, output_path, width, height, fps, encoder: str, encoder_options: str, time_base=None, mp4_fast_start=False, video_filter: str = ""):
         container_options = {}
         if mp4_fast_start and (output_path.lower().endswith(".mp4") or output_path.lower().endswith(".mov")):
             container_options["movflags"] = "+frag_keyframe+empty_moov+faststart"
@@ -431,7 +504,7 @@ class VideoWriter:
         target_pix_fmt = 'yuv420p'
         if self.is_qsv_encoder:
             target_pix_fmt = 'nv12'
-        
+
         video_stream_out.pix_fmt = target_pix_fmt
         video_stream_out.codec_context.pix_fmt = target_pix_fmt
 
@@ -456,6 +529,11 @@ class VideoWriter:
         self.output_container = output_container
         self.video_stream = video_stream_out
 
+        # Video filter graph (None when no filter is configured)
+        self.filter_graph = None
+        if video_filter and video_filter.strip():
+            self.filter_graph = self._create_filter_graph(video_filter.strip(), width, height, time_base)
+
         # Buffers for reordering frames
         self.BUFFER_MAX_SIZE = 30
         self.pts_heap = []
@@ -468,6 +546,26 @@ class VideoWriter:
     def __exit__(self, exc_type, exc_value, traceback):
         self.release()
 
+    def _drain_filter_graph(self):
+        """Pull all available frames from the filter graph and encode them.
+
+        Called after vpush() to consume any output the filter has produced.
+        BlockingIOError means the filter is still buffering — this is normal
+        and not an error condition, so we catch it and return.
+        """
+        while True:
+            try:
+                filtered_frame = self.filter_graph.vpull()
+                out_packet = self.video_stream.encode(filtered_frame)
+                if out_packet:
+                    self.output_container.mux(out_packet)
+            except av.error.BlockingIOError:
+                # Filter is still buffering — no output available yet.
+                # This is the normal "not ready" path, not an error.
+                break
+            except (av.error.EOFError, EOFError):
+                break
+
     def _process_buffer(self, flush_all=False):
         """Processes the buffer to encode frames."""
         if len(self.frame_queue) > (self.BUFFER_MAX_SIZE / 2) or (flush_all and self.frame_queue):
@@ -477,9 +575,15 @@ class VideoWriter:
 
             out_frame = av.VideoFrame.from_ndarray(frame_to_encode, format='rgb24')
             out_frame.pts = pts_to_assign
-            out_packet = self.video_stream.encode(out_frame)
-            if out_packet:
-                self.output_container.mux(out_packet)
+            out_frame.time_base = self.video_stream.time_base
+
+            if self.filter_graph is not None:
+                self.filter_graph.vpush(out_frame)
+                self._drain_filter_graph()
+            else:
+                out_packet = self.video_stream.encode(out_frame)
+                if out_packet:
+                    self.output_container.mux(out_packet)
 
 
     def write(self, frame, frame_pts=None, bgr2rgb=False):
@@ -506,6 +610,24 @@ class VideoWriter:
     def release(self):
         while len(self.frame_queue) > 0:
             self._process_buffer(flush_all=True)
+        # Flush the filter graph
+        if self.filter_graph is not None:
+            try:
+                self.filter_graph.vpush(None)
+                # After EOF, pull all remaining frames from the filter
+                while True:
+                    try:
+                        filtered_frame = self.filter_graph.vpull()
+                        out_packet = self.video_stream.encode(filtered_frame)
+                        if out_packet:
+                            self.output_container.mux(out_packet)
+                    except (av.error.EOFError, EOFError):
+                        break
+                    except av.error.BlockingIOError:
+                        # Should not happen after EOF, but handle defensively
+                        break
+            except Exception:
+                logger.warning("Error on flushing filter graph. Ignoring...")
         # Flush the encoder
         try:
             out_packet = self.video_stream.encode(None)

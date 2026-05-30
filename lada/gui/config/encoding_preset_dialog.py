@@ -23,6 +23,7 @@ class EncodingPresetDialog(Adw.Dialog):
     text_view_encoder_options: Gtk.TextView = Gtk.Template.Child()
     drop_down_encoders: Gtk.DropDown = Gtk.Template.Child()
     entry_encoder_options: Gtk.Entry = Gtk.Template.Child()
+    entry_video_filter: Gtk.Entry = Gtk.Template.Child()
     entry_description: Gtk.Entry = Gtk.Template.Child()
     button_save: Gtk.Button = Gtk.Template.Child()
 
@@ -47,6 +48,8 @@ class EncodingPresetDialog(Adw.Dialog):
         self.update_text_view_encoder_options(self._encoding_preset.encoder_name)
 
         self.entry_encoder_options.set_text(self._encoding_preset.encoder_options)
+
+        self.entry_video_filter.set_text(self._encoding_preset.video_filter)
 
         self.encoders = video_utils.get_video_encoder_codecs()
         strings = Gtk.StringList()
@@ -90,11 +93,13 @@ class EncodingPresetDialog(Adw.Dialog):
     def button_create_clicked_callback(self, button: Gtk.Button):
         description = self.entry_description.get_text()
         encoder_options = self.entry_encoder_options.get_text()
+        video_filter = self.entry_video_filter.get_text()
         encoder = self.get_selected_encoder()
         if encoder is not None and encoder_options is not None and description is not None and utils.is_unique_preset_description(description):
             self._encoding_preset.description = description
             self._encoding_preset.encoder_name = encoder.name
             self._encoding_preset.encoder_options = encoder_options
+            self._encoding_preset.video_filter = video_filter
             self.emit("preset-changed", self.encoding_preset)
             self.close()
 
