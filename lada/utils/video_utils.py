@@ -529,6 +529,12 @@ class VideoWriter:
         self.output_container = output_container
         self.video_stream = video_stream_out
 
+        # Preserve the original time_base before the encoder opens and potentially
+        # overrides video_stream.time_base with its own internal value (e.g. 1/16000
+        # instead of 1/1000). Frames must use the original time_base so that their
+        # PTS values are interpreted correctly by the encoder.
+        self._time_base = time_base
+
         # Video filter graph (None when no filter is configured)
         self.filter_graph = None
         if video_filter and video_filter.strip():
@@ -575,7 +581,7 @@ class VideoWriter:
 
             out_frame = av.VideoFrame.from_ndarray(frame_to_encode, format='rgb24')
             out_frame.pts = pts_to_assign
-            out_frame.time_base = self.video_stream.time_base
+            out_frame.time_base = self._time_base
 
             if self.filter_graph is not None:
                 self.filter_graph.vpush(out_frame)
