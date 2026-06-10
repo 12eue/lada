@@ -93,6 +93,21 @@ class VideoReader:
         if self.nvidia_decode:
             hwaccel = av.codec.hwaccel.HWAccel('cuda', allow_software_fallback=True)
         self.container = av.open(self.file, metadata_errors='ignore', hwaccel=hwaccel)
+
+        # Pre-flight check: validate that the video stream's pixel format is decodable.
+        # A None/unknown pix_fmt typically indicates a corrupted file or an incompatible
+        # codec/container combination (e.g. VC-1 bitstream copied from WMV into MP4 via
+        # `ffmpeg -c copy`), which can cause a native segfault in FFmpeg's decoder.
+        vstream = self.container.streams.video[0]
+        if vstream.codec_context.pix_fmt is None:
+            codec_name = vstream.codec.name
+            self.container.close()
+            raise ValueError(
+                f"Unable to determine pixel format for video codec '{codec_name}'. "
+                f"The video file may be corrupted or the codec-container combination is unsupported. "
+                f"If the file was created by concatenating videos with 'ffmpeg -c copy', "
+                f"try re-encoding instead: ffmpeg -f concat -safe 0 -i files.txt -c:v libx264 -crf 18 -c:a aac output.mp4"
+            )
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
