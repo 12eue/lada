@@ -115,15 +115,6 @@ def process_video_file(input_path: str, output_path: str, temp_dir_path: str, de
                        mosaic_restoration_model_name, preferred_pad_mode, max_clip_length, encoder: str, encoder_options: str, mp4_fast_start, nvidia_decode=False, video_filter: str = ""):
     video_metadata = get_video_meta_data(input_path)
 
-    # Warn about known problematic codec/container combinations.
-    # VC-1 in MP4 typically results from `ffmpeg -f concat -c copy` concatenating WMV files
-    # into an MP4 container without re-encoding, which produces a broken stream that can
-    # cause a native segfault in FFmpeg's VC-1 decoder.
-    if video_metadata.codec_name == 'vc1' and input_path.lower().endswith(('.mp4', '.m4v', '.mov')):
-        print(_("Warning: VC-1 codec in MP4/MOV container may cause crashes. "
-                "If this file was created by concatenating WMV videos with 'ffmpeg -c copy', "
-                "try re-encoding instead: ffmpeg -f concat -safe 0 -i files.txt -c:v libx264 -crf 18 -c:a aac output.mp4"))
-
     frame_restorer = FrameRestorer(device, input_path, max_clip_length, mosaic_restoration_model_name,
                  mosaic_detection_model, mosaic_restoration_model, preferred_pad_mode, nvidia_decode=nvidia_decode)
     success = True

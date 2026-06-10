@@ -105,8 +105,6 @@ class VideoReader:
             raise ValueError(
                 f"Unable to determine pixel format for video codec '{codec_name}'. "
                 f"The video file may be corrupted or the codec-container combination is unsupported. "
-                f"If the file was created by concatenating videos with 'ffmpeg -c copy', "
-                f"try re-encoding instead: ffmpeg -f concat -safe 0 -i files.txt -c:v libx264 -crf 18 -c:a aac output.mp4"
             )
         return self
 
